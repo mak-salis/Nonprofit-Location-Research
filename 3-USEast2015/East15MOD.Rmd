@@ -1,0 +1,121 @@
+---
+title: "East15 Modified"
+output: html_notebook
+---
+
+In this document, I will rerun the analysis of agglomeration in nonprofits using a modified version of the East15 dataframe. I will then compare the distribution of gammas to the previous distribution.
+
+```{r}
+load("~/Documents/Coe College/Spellman 2018/RData/East15.Rdata")
+source("~/Documents/Coe College/Spellman 2018/R/gazer.R")
+```
+
+#MOD 1: Remove negative revenues
+Possible bias? Bad data or accounting identity?
+```{r}
+mod1 <- subset.data.frame(East15, East15$TOTREV >= 0)
+```
+Now to run the analysis:
+
+```{r}
+industries <- aggregate(mod1$TOTREV, 
+          list(mod1$NTEECC),
+          sum)
+colnames(industries) <- c("Industry", "r")
+#Generating frequency column
+library(plyr)
+np <- count(mod1, "NTEECC")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+
+#Subsetting by frequency greater than 3: should this be done later???
+#industries <- subset.data.frame(industries, freq > 2)
+
+mod1$subtotals <- industries$r[ match(mod1$NTEECC, industries$Industry) ]
+mod1$zsubk <- mod1$TOTREV/mod1$subtotals
+areas <- aggregate(mod1$TOTREV,
+                       list(mod1$ZIP5, mod1$NTMAJ12),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+sectortotals <- aggregate(mod1$TOTREV,
+                       list(mod1$NTMAJ12),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+areas <- merge(areas, sectortotals, all = TRUE)
+areas$xsubi <- areas$subtotal/areas$sectortotal
+areas2 <- aggregate(mod1$zsubk, 
+                list(mod1$ZIP5, mod1$NTEECC),
+                sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+areas2$sector <- mod1$NTMAJ12[ match(areas2$industry, mod1$NTEECC)]
+areas <- merge(areas, areas2, by=c("area", "sector"))
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+H <- by(mod1$zsubk, list(mod1$NTEECC), function(x) sum(x^2), simplify = FALSE)
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+NTEECCmod1 <- industries
+gazer(NTEECCmod1)
+#save(NTEECCzip, file = "/home/samutavi/Documents/Coe College/Spellman 2018/RData/NTEECCzip.Rdata")
+```
+This gamma distribution still has large negative values. These are likely caused by H values close to 1. I will check this by looking at all large negative gammas.
+
+```{r}
+lows <- subset(NTEECCmod1,NTEECCmod1$gamma < -1)
+gazer(lows)
+```
+
+All these low gammas are for core codes that have an H close to 1 and an X of basically 0. An H approaching 1 indicates that the majority of the revenue in the core code comes from just one nonprofit, since H is a measure of the "plant size distribution". An X=0 means no area contains a significant fraction of the sector revenue.
+
+Based on what I have learned from the outliers, I think we should be looking only at core codes which satisfy 2 criteria:
+
+1. They have an H less than some cutoff, suppose .95
+2. They have a frequency of greater than some cutoff, suppose 5.
+ 
+```{r}
+CCzipFINAL <- subset(NTEECCmod1, NTEECCmod1$H <= .95 & NTEECCmod1$freq >= 5)
+gazer(CCzipFINAL)
+```
+
+This distribution looks entirely reasonable, so I will save it as an Rdata file.
+
+```{r}
+save(CCzipFINAL, file = "/home/samutavi/Documents/Coe College/Spellman 2018/USEast2015/Output/CCzipFINAL.Rdata")
+
+#Also save in the main Rdata folder
+save(CCzipFINAL, file = "/home/samutavi/Documents/Coe College/Spellman 2018/RData/CCzipFINAL.Rdata")
+
+```
+Now I want to recreate the ggplot distributions of gamma at the zip level.
+
+```{r}
+library(ggplot2)
+gammazipFINAL <- ggplot(data = CCzipFINAL, aes(x=gamma)) + 
+  geom_histogram(binwidth = .01, fill="black", col="gray") +
+  xlim(-1, 1)
+#Takes out gridlines, background, and creates neater appearance
+gammazipFINAL + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=20), plot.title = element_text(hjust = 0.5)) + labs(title = "NP gamma at zipcode level", x = "Gamma", y = "Number of industries")
+ggsave("gammazipFINAL.jpg", width = 16, height = 9)
+
+```
+
+
+
+#MOD 2: Remove nonprofits (outliers) with huge revenues
+How much does revenue affect gammas? In this modification, I will run the analysis without the top 10% of revenues and see how much the gamma distribution changes.
+```{r}
+mean(East15$TOTREV)
+median(East15$TOTREV)
+```
+To be continued...

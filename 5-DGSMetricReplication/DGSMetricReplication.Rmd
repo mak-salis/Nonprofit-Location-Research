@@ -1,0 +1,146 @@
+---
+title: "DGS Metric Replication"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+In this document, I will replicate the DGS metric for agglomeration. This is given as J-H, or  $$\sum_{k=1}^{K}{s_k^2}-\sum_{n=1}^{N}{z_n^2}$$ when N<K. The variables I need are:
+
+$s_k$, the kth region's share of industry size
+
+$z_n$, the nth firm's share of industry size.
+
+Applying this to the nonprofit sector, I will use nonprofits as firms, total revenue as a measure of size, and zipcodes as regions. I will then be able to compare my results to the gammas we found as a replication of the EG metric.
+
+First, I load the nonprofit data for all 501(c)(3) organizations in the 31 eastern states of the US.
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/East15.Rdata")
+```
+
+I want to check that N<K so that the results are accurate. To do this, I will find the core code with the highest frequency, and compare that to the number of zipcodes for which we have nonprofit data.
+
+```{r}
+NTEECC <- aggregate(East15$TOTREV, 
+          list(East15$NTEECC),
+          sum)
+colnames(NTEECC) <- c("NTEECC", "r")
+
+#Generating frequency column
+library(plyr)
+np <- count(East15, "NTEECC")
+names(np)[1] = "NTEECC"
+NTEECC <- merge(NTEECC, np)
+colnames(NTEECC) <- c("NTEECC", "r", "N")
+
+
+#Finding the max freq
+max(NTEECC$N)
+NTEECC$NTEECC[which(NTEECC$N == "27776")]
+```
+So the highest N= 27776 in core code T20 and all other core codes are smaller than that. Now to find the highest K.
+```{r}
+regions <- aggregate(East15$TOTREV, 
+          list(East15$NTEECC, East15$ZIP5),
+          sum)
+colnames(regions) <- c("NTEECC", "ZIP5", "r")
+
+#Generating frequency column
+rg <- count(regions, "NTEECC")
+colnames(rg) <- c("NTEECC", "K")
+NTEECC <- merge(NTEECC, rg)
+
+#Finding the max freq
+max(rg$K)
+
+```
+Now I have N and K for every NTEE core code. I want to double check that these numbers are correct. I will test a couple of codes.
+```{r}
+#Testing CC A013: N=13, K=13
+East15$ZIP5[which(East15$NTEECC == "A013")]
+```
+
+This seems to be correct, but the dataframe NTEECC also shows that N is necessarily equal to or greater than K, if K is defined as the number of regions where the core code exists. Regardless of this, I am going to continue calculating the metric.
+
+For $z_n$, I will add the core code revenue to East15, and then calculate each nonprofit's share of its core code revenue.
+```{r}
+East15$IndRev <- NTEECC$r[ match(East15$NTEECC, NTEECC$NTEECC)]
+East15$z_n <- East15$TOTREV/East15$IndRev
+East15$z_n2 <- East15$z_n^2
+H <- aggregate(East15$z_n2,
+                      list(East15$NTEECC),
+                      sum)
+NTEECC$H <- H$x
+```
+The next variable I need is the s_k for every region of every core code. This is each zip5's share of core code revenue, the same IndRev I used for H.
+```{r}
+regions$IndRev <- NTEECC$r[ match(regions$NTEECC, NTEECC$NTEECC)]
+regions$s_k <- regions$r/regions$IndRev
+regions$s_k2 <- regions$s_k^2
+J <- aggregate(regions$s_k2,
+                      list(regions$NTEECC),
+                      sum)
+NTEECC$J <- J$x
+#Final step:
+NTEECC$DGS <- NTEECC$J-NTEECC$H
+```
+Now to look at the distribution of the DGS metric.
+```{r}
+library(ggplot2)
+ggplot(NTEECC, aes(x=DGS)) + 
+  geom_histogram(binwidth = .01, fill="black", col="gray") +
+  xlim(-1, 1) +
+  ylim(0, 5) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                        panel.background = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=20), plot.title = element_text(hjust = 0.5)) + labs(x = "DGS", y = "Frequency")
+  
+```
+
+The vast majority of the values are 0. A handful of industries have small positive values. This is not surprising considering the construction of the metric. There seems to be no way for the metric to be negative. 
+
+Next, I'm going to try the fix given in the paper where $1/N$ is subtracted from H and $1/K$ is subtracted from J before taking the difference.
+```{r}
+NTEECC$newJ <- NTEECC$J-(1/NTEECC$K)
+NTEECC$newH <- NTEECC$H-(1/NTEECC$N)
+NTEECC$newDGS <- NTEECC$newJ-NTEECC$newH
+
+
+hist(NTEECC$newDGS)
+```
+I'm very interested in seeing how this measure correlates with the EG metric, gamma. I will load the dataframe that contains gamma and run a correlation on the two measures.
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/NTEECCzip.Rdata")
+
+#Making a new dataframe with just the two variables I want.
+agglom <- data.frame("Gamma" = NTEECCzip$gamma, "DGS" = NTEECC$newDGS)
+
+#Making a plot first
+plot(agglom$Gamma, agglom$DGS, xlab = "Gamma", ylab = "Alpha")
+ggplot(agglom, aes(Gamma, DGS))+
+  geom_point() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=20), plot.title = element_text(hjust = 0.5)) + labs(x = "Gamma", y = "Alpha")
+ggsave("Output/gammaalpha.jpg", width = 16, height = 9)
+
+
+#Running the correlation
+cor(agglom, use="pairwise.complete.obs")
+```
+
+It looks like there is a strong correlation for positive values. I want to see how strong that is.
+```{r}
+#First, I will make a new dataframe with only positive values.
+agglom$DGS[agglom$DGS < 0] <- NA
+agglom$Gamma[agglom$Gamma <0] <- NA
+
+#I want to see how many positive values I have for each metric.
+length(agglom$Gamma[!is.na(agglom$Gamma)])
+length(agglom$DGS[!is.na(agglom$DGS)])
+
+#Now making a new df with only complete cases (no NAs anywhere).
+agglom2 <- agglom[complete.cases(agglom), ]
+
+#Running the correlation
+cor(agglom2)
+
+```
+

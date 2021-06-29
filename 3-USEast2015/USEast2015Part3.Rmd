@@ -1,0 +1,58 @@
+---
+title: "USEast2015, Part 3"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+In this notebook, I want to explore a few questions I have about the results we have from the initial analysis of the nonprofit industries in the 31 eastern states of the US. I'm using the dataframe of gamma values from the analysis at the zipcode level and the state level.
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/NTEECCzip.Rdata")
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/NTEECCstate.Rdata")
+```
+
+
+#How many nonprofits should an industry have, to give a meaningful gamma?
+
+When we have very small numbers, the H for an industry is very high. There should be some number of firms beyond which the results for gamma do not vary significantly. To find that number, I'm going to look at the descriptive statistics for gamma in industries with only 2 firms to industries with increasing numbers of firms. In fact, I should be able to plot the mean of gamma in each subset and see when the change in gamma becomes negligible. I'll start with the zip code level.
+
+```{r}
+summary(NTEECCzip$gamma)
+mean(na.omit(NTEECCzip$gamma))
+mean(na.omit(NTEECCzip$gamma[NTEECCzip$freq > 2]))
+mean(na.omit(NTEECCzip$gamma[NTEECCzip$freq > 3]))
+mean(na.omit(NTEECCzip$gamma[NTEECCzip$freq > 4]))
+mean(na.omit(NTEECCzip$gamma[NTEECCzip$freq > 5]))
+mean(na.omit(NTEECCzip$gamma[NTEECCzip$freq > 6]))
+mean(na.omit(NTEECCzip$gamma[NTEECCzip$freq > 7]))
+
+```
+I want another dataframe where minimum frequency will be one column and the mean gamma will be another column.
+```{r}
+minfreq <- c(1:1000)
+means<- data.frame(minfreq)
+means$gammabar <- apply(means, 1, function(x) mean(na.omit(NTEECCzip$gamma[NTEECCzip$freq > x])))
+```
+Now I can plot this and see at what point the frequency no longer matters.
+
+```{r}
+plot(means$gammabar, means$minfreq, ylim = c(1,1000))
+```
+This seems to indicate that nonprofit industries of different sizes behave very differently with regard to clustering. When industries of all sizes are taken into account, gammas are more negative. When only large industries are taken into account, gamma is close to zero. This seems to mean that nonprofits in small industries repel each other but nonprofits in large industries do not, confirming Fruttero and Gauri's observations on nonprofits in Bangladesh. Nonprofits in small industries may have more of an incentive to distinguish themselves to win donor funding while nonprofits in larger industries have less of an incentive since it would be harder to do so. I wonder how many nonprofits the biggest industry has.
+```{r}
+max(na.omit(NTEECCzip$freq))
+```
+Clearly, my plot could go a lot further. I'm going to go back and extend the dataframe means further. 
+
+```{r}
+
+plot(means$gammabar, means$minfreq, xlim = c(-.01, 0), ylim = c(100,1000))
+```
+Now I want to plot gammas for industries of different sizes and show the industry size with a color. First, I will create a variable for industry size that puts each industry in one of three or four different classes.
+```{r}
+size <- cut(NTEECCzip$freq, c(0, 30, 60, 100, 1000), labels = FALSE)
+NTEECCzip$size <- as.numeric(size)
+plot(NTEECCzip$gamma, NTEECCzip$freq, col=rainbow(4)[NTEECCzip$size], xlim = c(-1, 1), ylim = c(0, 500))
+```
+
+

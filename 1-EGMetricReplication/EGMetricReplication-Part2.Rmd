@@ -1,0 +1,167 @@
+---
+title: "Replication of the EG Metric-Part 2"
+output:
+  pdf_document: default
+  html_notebook: default
+  toc: true
+---
+#Purpose
+In this document, I want to replicate the EG metric for agglomeration for every nonprofit industry in the HU (Human Services) sector, in Cedar Rapids.
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/CR13.Rdata")
+names(CR13)
+```
+
+#Method
+I'm going to continue using total revenue as a measure of size and I will use 5-digit zip codes for geographic units. 
+
+$i$ will be given by 5-digit zip codes.
+
+$z_k$ is each NP establishment's share of total "ntee1" industry revenue (that is, the one-letter industry designation)
+
+$x_i$ is $i$'s share of "HU" revenue
+
+With these three variables, we would find the following:
+
+$s_i$ would be constructed from $z_k$, using only establishments inside $i$, for each one-letter industry
+
+$G$ would be constructed from $s_i$ and $x_i$, for each one-letter industry
+
+$H$ comes from a Herfindahl of $z_k$, for each one-letter industry
+
+These variables would give $\gamma$, which is the EG measure of agglomeration. I want a gamma for every one-letter industry inside HU.
+
+#Starting with HU sector
+The HU sector has eight one-letter industries, I, J, K, L, M, N, O, and P. In Part 1, we found $\gamma$ for industry P. Now I want to automate the code to get gamma for every industry in sector HU.
+
+I will use a subset of CR13 that is just HU establishments.
+
+```{r}
+HU <- subset(CR13, CR13$ntmaj5 == "HU")
+barplot(table(HU$ntee1))
+```
+#Creating Necessary Variables
+
+##Creating $z_k$
+The first step is to create a variable called "zsubk" which is every nonprofit's share of total revenue in its own industry. First, I need a data set of revenue subtotals by "ntee1" industry.
+```{r}
+totrevnt1 <- aggregate(HU$totrev, 
+          list(HU$ntee1),
+          sum)
+totrevnt1
+```
+Now I need to divide each nonprofit's total revenue by the appropriate number from the dataset above, depending on the NTEE1 industry. The easiest way to do this is probably to create a new column in HU that has the relevant subtotal for each nonprofit. 
+
+```{r}
+HU$subtotals <- totrevnt1$x[ match(HU$ntee1, totrevnt1$Group.1) ]
+
+```
+
+Next, I will create a vector "zsubk" which is each establishment's total revenue divided by the sum given above.
+```{r}
+HU$zsubk <- HU$totrev/HU$subtotals
+HU$zsubk
+sum(HU$zsubk) #Checking that the individual shares add to 8.
+```
+ 
+This gives $z_k$. 
+
+##Creating $x_i$
+Next, I want to find $x_i$ which is each zip code's share of total HU revenue. So first I find totrevHU.  
+```{r}
+totrevHU <- sum(HU$totrev)
+totrevHU
+```
+I can use the aggregate command to add totrev by zip code.
+
+```{r}
+totrevzip <- aggregate(HU$totrev, 
+          list(HU$zip5),
+          sum)
+totrevzip
+
+```
+Perfect. This has defined 11 areas ($i$) and now we can get $x_i$ for each of the areas by dividing each of the numbers above by totrevHU.
+
+```{r}
+totrevzip$xsubi <- totrevzip$x/totrevHU
+totrevzip$xsubi
+sum(totrevzip$xsubi)
+```
+
+##Creating $s_i$
+Now I have $z_k$ and $x_i$. Using $z_k$, I need to get $s_i$ for every zip code. This is defined as $s_i=\sum_k{z_k}{u_{ki}}$ where $u_{ki}$ is an indicator variable equal to 1 if establishment $k$ is in $i$ and equal to 0 if $k$ is not in $i$. I need a different $s_i$ for every industry, so basically I need to aggregate just the establishments in each zipcode AND industry to find subtotals of the variable I've called "zsubk". 
+
+```{r}
+totrevzip2 <- aggregate(HU$zsubk, 
+                      list(HU$zip5, HU$ntee1),
+                      sum)
+colnames(totrevzip2) <- c("Group.1", "Group.2", "ssubi")
+sum(totrevzip2$ssubi)
+sum(totrevzip2$ssubi[totrevzip2$Group.2 == "P"]) #Checking that each industry totals to 1.
+```
+```{r}
+#Checking that there are no values of ssubi that are above 1.
+length(totrevzip2$ssubi)
+length(totrevzip2$ssubi[totrevzip2$ssubi > 1])
+sum(totrevzip2$ssubi)
+```
+
+##Finding $G$ for Industry P
+Now I add these "ssubi" values to the data frame "totrevzip" in a column called "ssubi". I use the merge function for this. I would like to get a value of 0 for all the zipcodes that have no revenue from P; I will do that in a separate command.
+ 
+```{r}
+revzip <- merge(totrevzip, totrevzip2, all = TRUE)
+revzip[is.na(revzip)] <- 0
+
+revzip
+
+```
+With this dataset, I can find G. $G=\sum_i{(s_i-x_i)^2}$
+
+```{r}
+revzip$geocon <- (revzip$ssubi-revzip$xsubi)^2
+Gbyindustry <- aggregate(revzip$geocon, 
+              list(revzip$Group.2),
+              sum)
+colnames(Gbyindustry) <- c("Group.1", "G")
+totrevnt1 <- merge(totrevnt1, Gbyindustry, all = TRUE)
+```
+Now I have a vector of G values by industry, which is exactly what I want.
+
+##Finding $H$ for Every Industry
+Now I can use zsubk to find the Herfindahl index given by $H=\sum_k{z_k^2}$ for every industry.
+```{r}
+library(hhi)
+?hhi
+H <- by(HU, list(HU$ntee1), function(x) hhi(x, "zsubk"), simplify = FALSE)
+#Now I need this as a dataframe.
+H <- cbind(H)
+H <- unlist(H)
+totrevnt1 <- cbind(totrevnt1, H)
+
+```
+##Finding $X$ for Every Industry
+The last thing I need in order to find $\gamma$ for every industry is $\sum{x_i^2}$, which I will just call "X". Again, I can use "by" to apply my function to subsets of the dataframe.
+
+```{r}
+X <- by(revzip$xsubi, list(revzip$Group.2), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+totrevnt1 <- cbind(totrevnt1, X)
+#To avoid confusion, I'm going to delete the column in totrevnt1 called "x" because this has nothing to do with "X".
+totrevnt1$x <- NULL
+```
+
+#Result
+Now I have G, H, and X by industry in a dataframe called totrevnt1. I can use those three to come up with $\gamma$, using the EG definition of $\gamma$.
+
+$$\gamma=\frac{G-(1-\sum{x_i^2})H}{(1-\sum{x_i^2})(1-H)}$$
+that is,
+$$\gamma=\frac{G-(1-X)H}{(1-X)(1-H)}$$
+```{r}
+attach(totrevnt1)
+totrevnt1$gamma <- (totrevnt1$G-(1-totrevnt1$X)*totrevnt1$H)/((1-totrevnt1$X)*(1-totrevnt1$H))
+totrevnt1$gamma
+```
+This is a very interesting result, except that there are two values smaller than -1, which is an indication that something went wrong somewhere...Troubleshooting is needed at this point to make sure each variable is what it is supposed to be, because I have checked the final result for industry K by hand, and the results are correct, given the values in the dataframe. Therefore, the values in the dataframe must be wrong for one or more variables. 

@@ -1,0 +1,173 @@
+---
+title: "EG Metric Simulations"
+output:
+  pdf_document: default
+  html_notebook: default
+  toc: true
+---
+#Purpose
+In this document, I want to replicate the EG metric for agglomeration for a test dataset to see if the metric is working as I expect. I will follow the structure of my previous document, EG Metric Replication, Part 3, which replicates the metric for every industy and sector in Cedar Rapids.
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/EGSimulation.Rdata")
+EGSimulation
+```
+
+#Method
+I have a variable called "size" and I will use the variable "area" for geographic units. There are nine areas, numbered 1 to 9. So far, I have made 6 industries in three "sizes"--either 1, 5, or 10. 
+
+$i$ will be given by "area".
+
+$z_k$ is each NP establishment's share of total "Industry" revenue (that is, the one-letter industry designation)
+
+$x_i$ is $i$'s share of "sector" revenue
+
+With these three variables, we would find the following:
+
+$s_i$ would be constructed from $z_k$, using only establishments inside $i$, for each one-letter industry
+
+$G$ would be constructed from $s_i$ and $x_i$, for each one-letter industry
+
+$H$ comes from a Herfindahl of $z_k$, for each one-letter industry
+
+These variables would give $\gamma$, which is the EG measure of agglomeration. I want a gamma for every one-letter industry.
+
+#Sector and Industries
+This simulation has six industries, named A, B, C, D, E, and F. A, B, and C belong to sector ABC and D, E, and F belong to sector DEF. In sector ABC, every industry is evenly dispersed, with one firm in each area. In sector DEF, every industry is completely clustered in a single area. I expect gamma to be 0 in every industry in sector ABC, and 1 for every industry in sector DEF. 
+
+#Creating Necessary Variables
+
+##Creating $z_k$
+The first step is to create a variable called "zsubk" which is every nonprofit's share of total size in its own industry. First, I need a data set of "size" subtotals by industry.
+```{r}
+industries <- aggregate(EGSimulation$Size, 
+          list(EGSimulation$Industry),
+          sum)
+colnames(industries) <- c("Industry", "r")
+industries
+```
+Now I need to divide each nonprofit's total revenue by the appropriate number from the dataset above, depending on the industry industry. The easiest way to do this is probably to create a new column in EGSimulation that has the relevant subtotal for each nonprofit. 
+
+```{r}
+EGSimulation$subtotals <- industries$r[ match(EGSimulation$Industry, industries$Industry) ]
+
+```
+
+Next, I will create a vector "zsubk" which is each establishment's total revenue divided by the sum given above.
+```{r}
+EGSimulation$zsubk <- EGSimulation$Size/EGSimulation$subtotals
+EGSimulation$zsubk
+sum(EGSimulation$zsubk) #Checking that the individual shares add to 6.
+```
+ 
+This gives $z_k$. This is correct so far, since each nonprofit in the simulation has the same size relative to its own industry.
+
+##Creating $x_i$
+Next, I want to find $x_i$ which is each area's share of total sector size. For this, I'll need to aggregate by area and "sector" to find subtotals for each one, and then I also need the totals for each sector. 
+```{r}
+areas <- aggregate(EGSimulation$Size,
+                       list(EGSimulation$Area, EGSimulation$Sector),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+areas
+
+sectortotals <- aggregate(EGSimulation$Size,
+                       list(EGSimulation$Sector),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+sectortotals
+#Now to merge the two datasets.
+areas <- merge(areas, sectortotals, all = TRUE)
+#Then I get xsubi for every zip code by dividing.
+areas$xsubi <- areas$subtotal/areas$sectortotal
+#The sum of all the xsubis should be 2.
+sum(areas$xsubi)
+```
+
+##Creating $s_i$
+Now I have $z_k$ and $x_i$. Using $z_k$, I need to get $s_i$ for every area. This is defined as $s_i=\sum_k{z_k}{u_{ki}}$ where $u_{ki}$ is an indicator variable equal to 1 if establishment $k$ is in $i$ and equal to 0 if $k$ is not in $i$. I need a different $s_i$ for every industry, so basically I need to aggregate just the establishments in each area AND industry to find subtotals of the variable I've called "zsubk". 
+
+```{r}
+areas2 <- aggregate(EGSimulation$zsubk, 
+                      list(EGSimulation$Area, EGSimulation$Industry),
+                      sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+sum(areas2$ssubi)
+sum(areas2$ssubi[areas2$industry == "A"]) #Checking that any given industry totals to 1.
+```
+```{r}
+#Checking that there are no values of ssubi that are above 1.
+length(areas2$ssubi)
+length(areas2$ssubi[areas2$ssubi > 1])
+sum(areas2$ssubi)
+```
+
+##Finding $G$ for Industry P
+Now I add these "xsubi" values to the data frame "areas2" in a column called "xsubi". I use the merge function for this. However, it's tricky because at this stage I need to specify which sector each industry belongs to. So first, I will create a column called sector in the areas2 dataframe that gives the correct sector. Then hopefully they will merge correctly based on both zipcode and sector variables.
+```{r}
+areas2$sector <- EGSimulation$Sector[ match(areas2$industry, EGSimulation$Industry)]
+#That worked! Now to merge correctly...
+
+areas <- merge(areas, areas2, by=c("area", "sector"))
+
+areas
+```
+With this dataset, I can find G. $G=\sum_i{(s_i-x_i)^2}$
+
+```{r}
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+```
+Now I have a vector of G values by industry, which is exactly what I want.
+
+##Finding $H$ for Every Industry
+Now I can use zsubk to find the Herfindahl index given by $H=\sum_k{z_k^2}$ for every industry.
+```{r}
+library(hhi)
+?hhi
+class(EGSimulation$zsubk)
+H <- by(EGSimulation, list(EGSimulation$Industry), function(x) hhi(x, "zsubk"), simplify = FALSE)
+#Now I need this as a dataframe.
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+
+```
+##Finding $X$ for Every Industry
+The last thing I need in order to find $\gamma$ for every industry is $\sum{x_i^2}$, which I will just call "X". Again, I can use "by" to apply my function to subsets of the dataframe.
+
+```{r}
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+
+```
+
+#Result
+Now I have G, H, and X by industry in a dataframe called industries. I can use those three to come up with $\gamma$, using the EG definition of $\gamma$.
+
+$$\gamma=\frac{G-(1-\sum{x_i^2})H}{(1-\sum{x_i^2})(1-H)}$$
+that is,
+$$\gamma=\frac{G-(1-X)H}{(1-X)(1-H)}$$
+```{r}
+attach(industries)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+industries$gamma
+```
+This is not quite what I expected, but it may help me troubleshoot my metric. Either my expectations were wrong or the calculations were wrong. Anyway, I will finish the calculations in the document just as I did for EG Metric Replication, Part 3.
+
+```{r}
+library(plyr)
+np <- count(EGSimulation, "Industry")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+industries
+
+```
+```{r}
+plot(industries$gamma, industries$freq)
+```

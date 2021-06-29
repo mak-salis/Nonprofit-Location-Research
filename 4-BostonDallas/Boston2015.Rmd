@@ -1,0 +1,145 @@
+---
+title: "Boston 2015"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+In this document I will analyze the agglomeration of nonprofit industries in Boston and Dallas/Ft. Worth and compare them to Bielefeld and Murdoch's (2004) results.
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/US2015.Rdata")
+boston <- subset.data.frame(US2015, US2015$CITY == "BOSTON" & US2015$STATE == "MA")
+dallas <- subset.data.frame(US2015, US2015$CITY == "DALLAS" | US2015$CITY == "FORT WORTH" & US2015$STATE == "TX")
+```
+Now I want to look at the distribution of nonprofit industries in both places.
+
+```{r}
+barplot(table(boston$NTEE1))
+barplot(table(dallas$NTEE1))
+```
+Bielefeld and Murdoch (2004) looked at industry B90 (Educational Support Services), and found that Boston had a negative response to nearby nonprofits while Dallas/Fort Worth had a positive response. I will get gamma for this industry for both metro areas and see if it confirms their results. 
+```{r}
+industries <- aggregate(boston$TOTREV, 
+          list(boston$NTEECC),
+          sum)
+colnames(industries) <- c("Industry", "r")
+boston$subtotals <- industries$r[ match(boston$NTEECC, industries$Industry) ]
+boston$zsubk <- boston$TOTREV/boston$subtotals
+areas <- aggregate(boston$TOTREV,
+                       list(boston$ZIP5, boston$NTMAJ12),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+sectortotals <- aggregate(boston$TOTREV,
+                       list(boston$NTMAJ12),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+areas <- merge(areas, sectortotals, all = TRUE)
+areas$xsubi <- areas$subtotal/areas$sectortotal
+areas2 <- aggregate(boston$zsubk, 
+                      list(boston$ZIP5, boston$NTEECC),
+                      sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+areas2$sector <- boston$NTMAJ12[ match(areas2$industry, boston$NTEECC)]
+areas <- merge(areas, areas2, by=c("area", "sector"))
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+H <- by(boston$zsubk, list(boston$NTEECC), function(x) sum(x^2), simplify = FALSE)
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+library(plyr)
+np <- count(boston, "NTEECC")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+bostongammas <- industries
+plot(bostongammas$gamma, bostongammas$freq)
+
+```
+And now for Dallas:
+
+```{r}
+industries <- aggregate(dallas$TOTREV, 
+          list(dallas$NTEECC),
+          sum)
+colnames(industries) <- c("Industry", "r")
+dallas$subtotals <- industries$r[ match(dallas$NTEECC, industries$Industry) ]
+dallas$zsubk <- dallas$TOTREV/dallas$subtotals
+areas <- aggregate(dallas$TOTREV,
+                       list(dallas$ZIP5, dallas$NTMAJ12),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+sectortotals <- aggregate(dallas$TOTREV,
+                       list(dallas$NTMAJ12),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+areas <- merge(areas, sectortotals, all = TRUE)
+areas$xsubi <- areas$subtotal/areas$sectortotal
+areas2 <- aggregate(dallas$zsubk, 
+                      list(dallas$ZIP5, dallas$NTEECC),
+                      sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+areas2$sector <- dallas$NTMAJ12[ match(areas2$industry, dallas$NTEECC)]
+areas <- merge(areas, areas2, by=c("area", "sector"))
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+H <- by(dallas$zsubk, list(dallas$NTEECC), function(x) sum(x^2), simplify = FALSE)
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+library(plyr)
+np <- count(dallas, "NTEECC")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+dallasgammas <- industries
+plot(dallasgammas$gamma, dallasgammas$freq)
+```
+
+Interestingly, neither of these metro areas seem to have \textit{any} nonprofits in the B90 industry, so I'm not sure what's happening there. However, we do have an interesting distribution of gammas. 
+```{r}
+#Source a function I've written for a ggplot histogram
+source('~/Documents/Coe College/Spellman 2018/R/gammahist.R')
+
+bostonzip <- gammahist(bostongammas, gamma)
+ggsave("boston15.jpg", width = 16, height = 9)
+
+dallaszip <- gammahist(dallasgammas, gamma)
+ggsave("dallas15.jpg", width = 16, height = 9)
+
+```
+
+That chunk replaced this code:
+
+library(ggplot2)
+bostonzip <- ggplot(data = bostongammas, aes(x=gamma)) + 
+  geom_histogram(binwidth = .1, fill="black", col="gray") +
+  xlim(-1, 1) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=20), plot.title = element_text(hjust = 0.5)) + labs(title = "Boston gammas at zipcode level", x = "Gamma", y = "Number of industries")
+bostonzip
+ggsave("boston15.jpg", width = 16, height = 9)
+
+dallaszip <- ggplot(data = dallasgammas, aes(x=gamma)) + 
+  geom_histogram(binwidth = .1, fill="black", col="gray") +
+  xlim(-1, 1) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=20), plot.title = element_text(hjust = 0.5)) + labs(title = "Dallas gammas at zipcode level", x = "Gamma", y = "Number of industries")
+dallaszip
+ggsave("dallas15.jpg", width = 16, height = 9)
+
+
+

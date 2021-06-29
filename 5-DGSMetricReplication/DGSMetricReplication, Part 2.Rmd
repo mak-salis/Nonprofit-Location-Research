@@ -1,0 +1,130 @@
+---
+title: "DGS Metric, Part 2"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+In this document, I will recreate the EG metric and the DGS metric for nonprofits in Cedar Rapids, to be able to compare them. First, I will bring in the East15 data file and isolate the nonprofits in Cedar Rapids. 
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/East15.Rdata")
+CR15 <- subset.data.frame(East15, East15$CITY=="CEDAR RAPIDS")
+rm(East15)
+```
+
+Now I need to run two analyses. The first is to get the EG metric, gamma.
+
+```{r}
+industries <- aggregate(CR15$TOTREV, 
+          list(CR15$NTEE1),
+          sum)
+colnames(industries) <- c("Industry", "r")
+#Generating frequency column
+library(plyr)
+np <- count(CR15, "NTEE1")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+#Subsetting by frequency greater than 2
+industries <- subset.data.frame(industries, freq > 2)
+
+CR15$subtotals <- industries$r[ match(CR15$NTEE1, industries$Industry) ]
+CR15$zsubk <- CR15$TOTREV/CR15$subtotals
+areas <- aggregate(CR15$TOTREV,
+                       list(CR15$ZIP, CR15$NTMAJ5),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+sectortotals <- aggregate(CR15$TOTREV,
+                       list(CR15$NTMAJ5),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+areas <- merge(areas, sectortotals, all = TRUE)
+areas$xsubi <- areas$subtotal/areas$sectortotal
+areas2 <- aggregate(CR15$zsubk, 
+                      list(CR15$ZIP, CR15$NTEE1),
+                      sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+areas2$sector <- CR15$NTMAJ5[ match(areas2$industry, CR15$NTEE1)]
+areas <- merge(areas, areas2, by=c("area", "sector"))
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+H <- by(CR15$zsubk, list(CR15$NTEE1), function(x) sum(x^2), simplify = FALSE)
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+NTEE1zip <- industries
+
+```
+
+I have almost entirely negative values for gamma, so it will be interesting to see how the DGS metric turns out. Now to get J-H:
+```{r}
+NTEE1 <- aggregate(CR15$TOTREV, 
+          list(CR15$NTEE1),
+          sum)
+colnames(NTEE1) <- c("NTEE1", "r")
+
+#Generating frequency column
+library(plyr)
+np <- count(CR15, "NTEE1")
+names(np)[1] = "NTEE1"
+NTEE1 <- merge(NTEE1, np)
+colnames(NTEE1) <- c("NTEE1", "r", "N")
+
+
+regions <- aggregate(CR15$TOTREV, 
+          list(CR15$NTEE1, CR15$ZIP),
+          sum)
+colnames(regions) <- c("NTEE1", "ZIP", "r")
+
+#Generating frequency column
+rg <- count(regions, "NTEE1")
+colnames(rg) <- c("NTEE1", "K")
+NTEE1 <- merge(NTEE1, rg)
+
+#Finding the max freq
+max(rg$K)
+
+CR15$IndRev <- NTEE1$r[ match(CR15$NTEE1, NTEE1$NTEE1)]
+CR15$z_n <- CR15$TOTREV/CR15$IndRev
+CR15$z_n2 <- CR15$z_n^2
+H <- aggregate(CR15$z_n2,
+                      list(CR15$NTEE1),
+                      sum)
+NTEE1$H <- H$x
+
+regions$IndRev <- NTEE1$r[ match(regions$NTEE1, NTEE1$NTEE1)]
+regions$s_k <- regions$r/regions$IndRev
+regions$s_k2 <- regions$s_k^2
+J <- aggregate(regions$s_k2,
+                      list(regions$NTEE1),
+                      sum)
+NTEE1$J <- J$x
+
+NTEE1$newJ <- NTEE1$J-(1/NTEE1$K)
+NTEE1$newH <- NTEE1$H-(1/NTEE1$N)
+NTEE1$newDGS <- NTEE1$newJ-NTEE1$newH
+
+
+hist(NTEE1$newDGS)
+
+```
+Finally, I need to get gamma values and DGS values in the same dataframe to compare them.
+```{r}
+#Making a new dataframe with just the two variables I want.
+agglom <- data.frame("Gamma" = NTEE1zip$gamma, "DGS" = NTEE1$newDGS)
+
+#Making a plot first
+plot(agglom$Gamma, agglom$DGS)
+
+#Running the correlation
+cor(agglom, use="complete.obs")
+
+```
+

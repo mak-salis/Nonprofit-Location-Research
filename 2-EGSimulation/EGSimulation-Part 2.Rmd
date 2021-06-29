@@ -1,0 +1,193 @@
+---
+title: "EG Metric Simulations, Part 2"
+output:
+  pdf_document: default
+  html_notebook: default
+  toc: true
+---
+#Purpose
+In this document, I want to run simulations on a few different data frames which are variations of the data frame used in EGSimulation. I am interested in changing the number of areas and seeing how gamma changes asa result.
+
+#Original Simulation
+First, I want to reduce all the code to a single chunk that can be run for any dataset and will output a dataframe containing all major variables and $\gamma$, the agglomeration metric of interest. Here is the output for the original simulation data.
+```{r echo=FALSE}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/EGSim.Rdata")
+industries <- aggregate(EGSim1$Size, 
+          list(EGSim1$Industry),
+          sum)
+colnames(industries) <- c("Industry", "r")
+EGSim1$subtotals <- industries$r[ match(EGSim1$Industry, industries$Industry) ]
+EGSim1$zsubk <- EGSim1$Size/EGSim1$subtotals
+areas <- aggregate(EGSim1$Size,
+                       list(EGSim1$Area, EGSim1$Sector),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+sectortotals <- aggregate(EGSim1$Size,
+                       list(EGSim1$Sector),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+areas <- merge(areas, sectortotals, all = TRUE)
+areas$xsubi <- areas$subtotal/areas$sectortotal
+areas2 <- aggregate(EGSim1$zsubk, 
+                      list(EGSim1$Area, EGSim1$Industry),
+                      sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+areas2$sector <- EGSim1$Sector[ match(areas2$industry, EGSim1$Industry)]
+areas <- merge(areas, areas2, by=c("area", "sector"))
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+library(hhi)
+H <- by(EGSim1$zsubk, list(EGSim1$Industry), function(x) sum(x^2), simplify = FALSE)
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+library(plyr)
+np <- count(EGSim1, "Industry")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+EGSim1
+industries1 <- industries
+industries1
+plot(industries$gamma, industries$freq)
+```
+
+#First Variation: Larger Geographic Units
+Now I want the output for a variation of the original simulation data. For this dataset, areas 1, 2, and 3 have been merged into a single area 1. Likewise, the other six areas have been merged into 2 areas, so that this replicates the result if fewer (that is, larger) geographic units are used over the same area.
+
+```{r echo=FALSE}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/EGSim2.Rdata")
+industries <- aggregate(EGSim2$Size, 
+          list(EGSim2$Industry),
+          sum)
+colnames(industries) <- c("Industry", "r")
+EGSim2$subtotals <- industries$r[ match(EGSim2$Industry, industries$Industry) ]
+EGSim2$zsubk <- EGSim2$Size/EGSim2$subtotals
+areas <- aggregate(EGSim2$Size,
+                       list(EGSim2$Area, EGSim2$Sector),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+sectortotals <- aggregate(EGSim2$Size,
+                       list(EGSim2$Sector),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+areas <- merge(areas, sectortotals, all = TRUE)
+areas$xsubi <- areas$subtotal/areas$sectortotal
+areas2 <- aggregate(EGSim2$zsubk, 
+                      list(EGSim2$Area, EGSim2$Industry),
+                      sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+areas2$sector <- EGSim2$Sector[ match(areas2$industry, EGSim2$Industry)]
+areas <- merge(areas, areas2, by=c("area", "sector"))
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+library(hhi)
+H <- suppressWarnings(by(EGSim2, list(EGSim2$Industry), function(x) hhi(x, "zsubk"), simplify = FALSE))
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+library(plyr)
+np <- count(EGSim2, "Industry")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+EGSim2
+industries2 <- industries
+industries2
+plot(industries$gamma, industries$freq)
+```
+
+#Second Variation: Twice as Many Areas
+The second variation has twice as many areas, but each industry has the same distribution and location pattern as in the original simulation. That is, industries A, B, and C are evenly dispersed throughout 18 areas, and industries D, E, and F are each entirely located in a single (but different) area.
+
+```{r echo=FALSE}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/EGSim3.Rdata")
+industries <- aggregate(EGSim3$Size, 
+          list(EGSim3$Industry),
+          sum)
+colnames(industries) <- c("Industry", "r")
+EGSim3$subtotals <- industries$r[ match(EGSim3$Industry, industries$Industry) ]
+EGSim3$zsubk <- EGSim3$Size/EGSim3$subtotals
+areas <- aggregate(EGSim3$Size,
+                       list(EGSim3$Area, EGSim3$Sector),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+sectortotals <- aggregate(EGSim3$Size,
+                       list(EGSim3$Sector),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+areas <- merge(areas, sectortotals, all = TRUE)
+areas$xsubi <- areas$subtotal/areas$sectortotal
+areas2 <- aggregate(EGSim3$zsubk, 
+                      list(EGSim3$Area, EGSim3$Industry),
+                      sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+areas2$sector <- EGSim3$Sector[ match(areas2$industry, EGSim3$Industry)]
+areas <- merge(areas, areas2, by=c("area", "sector"))
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+library(hhi)
+H <- suppressWarnings(by(EGSim3, list(EGSim3$Industry), function(x) hhi(x, "zsubk"), simplify = FALSE))
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+library(plyr)
+np <- count(EGSim3, "Industry")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+EGSim3
+industries3 <- industries
+industries3
+plot(industries$gamma, industries$freq)
+```
+
+#Result: Side-by-Side Comparison
+At this point, I would like to compare the three simulations side by side. 
+
+Original simulation:
+```{r echo=FALSE}
+industries1
+```
+Bigger geographic units:
+```{r echo=FALSE}
+industries2
+```
+
+More areas:
+```{r echo=FALSE}
+industries3
+```
+
+#Conclusion
+There are a few interesting observations from these results. 
+\begin{enumerate}
+  \item{G is the same for all industries in all three simulations. Since G captures the difference between the industry and the sector, this makes sense. In sector ABC, all industries behaved exactly like the sector as a whole, giving a G of 0. In sector DEF, each industry had a different value for G, indicating that plant size mattered as well as geographic distribution of the sector. G was lowest for industry F, since the large size of plants in F heavily influenced the sector pattern of distribution, and therefore showed the smallest "difference" between F and the sector. This suggests that G is weighted towards industries with large plants. That is, industries with large plants that are highly agglomerated will still have a lower G (and consequently a lower gamma) than smaller plants that are highly agglomerated. This culd make sense in the sense that it takes a higher agglomerative force to pull together small plants than large plants, but it could also be that G and gamma are simply weighted towards smaller plants. If gamma controlled for industry plant size, presumably high agglomeration would give the same gamma regardless of plant size.}
+  \item{When G is 0, H alone determines gamma. This is evident from the formula for gamma, but is seen more clearly in the simulations. Again, industry plant size plays a bigger role than one might expect. It is not clear to me if this is part of the underlying theory of agglomeration or a side effect of the construction of gamma.}
+  \item{Gamma for all industries is the same in simulations 1 and 2. This is interesting because it suggests that the size of the geographic unit doesn't matter as long as the area covered is the same. This is consistent with our analysis of Cedar Rapids which gave similar results whether we used five-digit or nine-digit zip codes. It should be noted that the size of the geographic unit is not quite the same as scale, which has been established to be important in the current agglomeration literature. A change in scale would correspond to a larger or smaller total area covered, as in simulation 3.}
+  \item{In general, as more areas are added to the analysis, as long as they are not completely empty of industries, X and H decrease, and gamma seems to increase. This is consistent with Ellison and Glaeser's (1997) results in which increasing the scale led to higher and higher gammas. This may be why we see so many negative values for gamma at the MSA level. However, this is very different from other papers (Duranton and Overman, 2005; Bielefeld and Murdoch, 2004) that find agglomerative forces at the 1-mile or 5-km scale.}
+\end{enumerate}

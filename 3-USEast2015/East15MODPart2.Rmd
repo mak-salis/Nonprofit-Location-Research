@@ -1,0 +1,96 @@
+---
+title: "East15MOD, Part 2"
+output: html_notebook
+---
+
+In this document, I get the subsetted final dataset for the gamma analysis at the state level and create visuals for both CCzipFINAL and CCstateFINAL.
+
+In Part 1, I created a dataset called CCzipFINAL, which was a subset of NTEECCzip. Now, using USEast15, Part 2, I will similarly get a new subsetted dataset called CCstateFINAL from the dataset called NTEECCstate.
+
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/East15.Rdata")
+source("~/Documents/Coe College/Spellman 2018/R/gazer.R")
+
+#Remove negative revenues
+mod1 <- subset.data.frame(East15, East15$TOTREV >= 0)
+
+#Run analysis at the state level
+industries <- aggregate(mod1$TOTREV, 
+          list(mod1$NTEECC),
+          sum)
+colnames(industries) <- c("Industry", "r")
+#Generating frequency column
+library(plyr)
+np <- count(mod1, "NTEECC")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+#Subsetting by frequency greater than 3
+industries <- subset.data.frame(industries, freq > 2)
+
+mod1$subtotals <- industries$r[ match(mod1$NTEECC, industries$Industry) ]
+mod1$zsubk <- mod1$TOTREV/mod1$subtotals
+areas <- aggregate(mod1$TOTREV,
+                       list(mod1$STATE, mod1$NTMAJ12),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+sectortotals <- aggregate(mod1$TOTREV,
+                       list(mod1$NTMAJ12),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+areas <- merge(areas, sectortotals, all = TRUE)
+areas$xsubi <- areas$subtotal/areas$sectortotal
+areas2 <- aggregate(mod1$zsubk, 
+                      list(mod1$STATE, mod1$NTEECC),
+                      sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+areas2$sector <- mod1$NTMAJ12[ match(areas2$industry, mod1$NTEECC)]
+areas <- merge(areas, areas2, by=c("area", "sector"))
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+H <- by(mod1$zsubk, list(mod1$NTEECC), function(x) sum(x^2), simplify = FALSE)
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+CCstate <- industries
+#save(NTEECCstate, file = "/home/samutavi/Documents/Coe College/Spellman 2018/RData/NTEECCstate.Rdata")
+
+#Apply two criteria
+CCstateFINAL <- subset(CCstate, CCstate$H <= .95 & CCstate$freq >= 5)
+gazer(CCstateFINAL)
+```
+
+Something is strange here. G should not be above 1. I'm subsetting these to look at them more closely.
+
+```{r}
+badG <- subset.data.frame(CCstateFINAL, CCstateFINAL$G > 1)
+badG
+```
+
+Looking at xsubi and ssubi for this industry...
+
+```{r}
+Q193 <- subset.data.frame(areas, areas$industry == "Q193")
+Q <- subset.data.frame(East15, East15$NTEECC == "Q193")
+```
+
+
+
+Now I save this dataset in both the USEast15/Output folder and the main RData folder for Spellman 2018.
+``{r}
+save(CCstateFINAL, file = "/home/samutavi/Documents/Coe College/Spellman 2018/USEast2015/Output/CCstateFINAL.Rdata")
+
+#Also save in the main Rdata folder
+save(CCstateFINAL, file = "/home/samutavi/Documents/Coe College/Spellman 2018/RData/CCstateFINAL.Rdata")
+
+```
+
+

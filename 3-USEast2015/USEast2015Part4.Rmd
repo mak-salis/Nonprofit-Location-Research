@@ -1,0 +1,145 @@
+---
+title: "EG Coagglomeration Metric"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+In this notebook, I will try to replicate the Ellison and Glaeser (1997) metrics of coagglomeration, $\gamma^c$ and $\lambda$. I start with the dataset of the 31 eastern states of the US.
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/East15.Rdata")
+```
+
+The equation for $\gamma^c$ is:
+$$\gamma^c=\frac{[\frac{G}{(1-X)}]-H-\sum_{j=1}^r{\hat\gamma_jw_j^2(1-H_j)}}{1-\sum_{j=1}^rw^2_j}$$
+The variables I need to replicate $\gamma^c$ are:
+\begin{enumerate}
+  \item{G, the raw concentration of employment in the group as a whole}
+  \item{H, the plant size Herfindahl of the group as a whole}
+  \item{$X$, the Herfindahl of $x_i$, each area's share of overall manufacturing employment}
+  \item{$\hat\gamma_j$, the gamma of the jth industry in the group}
+  \item{$w_j$, the jth industry's employment share of the group}
+  \item{$H_j$, the plant size Herfindahl of the jth industry}
+\end{enumerate}
+
+Several of these come directly from the agglomeration metric, $\gamma$. Specifically, $\hat\gamma_j$ is $\gamma$ from the previous analysis, $X$ is the same as the previous $X$, and $H_j$ is the same as $H$ in the previous analysis. The $G$ and $H$ I can get from a previous analysis at the NTEE1 level. So really the only new variable is $w_j$. 
+
+Of course, we are using total revenue instead of employment, and our industry "groups" will initially be the single letter NTEE1 industry classification. The $\gamma^c$ metric should then tell us how much nonprofit industries cluster with similar industries. A second step might be to find ways to relate different industries (for example by upstream and downstream ties) to see whether pairs of different industries cluster together at all.
+
+My first step will be to bring in all the variables that I already have from the previous analysis and to rename them for this one.
+
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/NTEECCzip.Rdata")
+colnames(NTEECCzip) <- c("Industry", "r", "Gsubj", "Hsubj", "X", "gammahat", "freq")
+```
+
+The next step is to find the "new" variable $w_j$, which all relates to the group, which in this case is the NTEE1 classification.
+
+#Finding $w_j$
+This variable should be fairly easy to get. I already have "r", which is each industry's total revenue. I now need to divide this by the group's total revenue, which I can get from the East15 dataset. So first, I'm going to create a new dataframe called "Coagg" which has the three variables I already have and columns for the new one I need.
+```{r}
+coagg <- data.frame(NTEECCzip$Industry, NTEECCzip$Hsubj, NTEECCzip$X, NTEECCzip$gammahat, NTEECCzip$r)
+colnames(coagg) <- c("Industry", "Hsubj", "X", "gammahat", "revenue")
+#Erasing a column that is misleading; this is not the X I need.
+coagg$X <- NULL
+#Creating a list of NTEE1 revenue.
+Group <- aggregate(East15$TOTREV, 
+          list(East15$NTEE1),
+          sum)
+colnames(Group) <- c("Group", "grprev")
+#Adding a "Group" column to coagg dataframe.
+coagg$Group <- East15$NTEE1[ match(coagg$Industry, East15$NTEECC)]
+#Merging dataframes by Group
+coagg <- merge(coagg, Group, all = TRUE)
+#Creating wsubj
+coagg$wsubj <- coagg$revenue/coagg$grprev
+```
+
+#Finding H
+Next I will get H for each group, that is, each NTEE1 category. $H=\sum_j{w_j^2H_j}$ so I just create a new column in the coagg dataframe and aggregate the values by group. 
+```{r}
+#Formula applied
+coagg$addforH <- coagg$wsubj^2*coagg$Hsubj
+#Subtotals added by group, excluding all NaNs.
+H <- aggregate(coagg$addforH[!is.nan(coagg$addforH)],
+                     list(coagg$Group[!is.nan(coagg$addforH)]),
+                     sum)
+colnames(H) <- c("Group", "H")
+#Merge with coagg (and Group, just for future reference) by Group
+Group <- merge(Group, H, all = T)
+coagg <- merge(coagg, H, all = T)
+```
+I'm going to clean up the coagg dataframe by deleting a few unnecessary columns.
+```{r}
+coagg$revenue <- NULL
+coagg$grprev <- NULL
+coagg$addforH <- NULL
+Group$grprev <- NULL
+```
+
+#Finding G
+The last variable I need is G for each group. $G=\sum(s_i-x_i)^2$ where $s_i$ is area $i$'s share of total revenue in the group and $x_i$ is $i$'s share of total revenue in the sector. This is easy because I actually have G for every NTEE1 industry in a dataframe called "NTEE1zip" which I made in USEast15 (Part 1). (This dataframe actually also has H for every group, so I didn't need to recreate H--but it is nice to see that my new H matches up exactly with the H I had before.)
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/NTEE1zip.Rdata")
+Group$G <- NTEE1zip$G
+coagg <- merge(coagg, Group, all = T)
+#Grabbing the correct X from this dataframe as well.
+Group$X <- NTEE1zip$X
+```
+Now I need to create two columns in the coagg dataframe. One is $\hat\gamma_jw_j^2(1-H_j)$, which I will aggregate by group and call J, and the other is $w_j^2$ which I will aggregate by group and call W.
+```{r}
+coagg$addtoJ <- (coagg$gammahat)*(coagg$wsubj^2)*(1-coagg$Hsubj)
+J <- aggregate(coagg$addtoJ[!is.nan(coagg$addtoJ)],
+               list(coagg$Group[!is.nan(coagg$addtoJ)]),
+               sum)
+colnames(J) <- c("Group", "J")
+Group <- merge(Group, J, all = T)
+```
+Now for W:
+```{r}
+coagg$addtoW <- coagg$wsubj^2
+W <- aggregate(coagg$addtoW,
+               list(coagg$Group),
+               sum)
+colnames(W) <- c("Group", "W")
+Group <- merge(Group, W, all = T)
+```
+Now I have all the variables I need in Group to calculate "GammaCoagg".
+```{r}
+rm(H)
+rm(W)
+rm(J)
+Group$GammaCoagg <- ((Group$G/(1-Group$X))-Group$H-Group$J)/(1-Group$W)
+```
+I am very interested in comparing this gamma to the agglomeration metric I got for the NTEE1 industries, so I'm going to add that gamma to this dataframe. For a sense of how big each industry is, I'm also going to include the frequency of the NTEE1 category.
+```{r}
+Group$GammaAgglom <- NTEE1zip$gamma
+Group$freq <- NTEE1zip$freq
+```
+And to finish up, I will plot a histogram of GammaCoagg, to get an idea of the distribution.
+```{r}
+library(ggplot2)
+gammacoagg <- ggplot(data = Group, aes(x=GammaCoagg)) + 
+  geom_histogram(binwidth = .025, fill="black", col="gray") +
+  xlim(-.3, .2)
+#Takes out gridlines, background, and creates neater appearance
+gammacoagg + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=20), plot.title = element_text(hjust = 0.5)) + labs(title = "NP gammas of coagglomeration", x = "Gamma Coagg", y = "Number of groups")
+ggsave("gammacoagg.jpg", width = 16, height = 9)
+
+```
+
+I'm interested in the correlation between the NTEE1 agglomeration gamma and the Group coagglomeration gammas. 
+
+```{r}
+plot(Group$GammaCoagg, Group$GammaAgglom)
+
+finite <- subset.data.frame(Group, Group != "Z")
+cor(finite$GammaCoagg, finite$GammaAgglom)
+```
+
+I want to save the Group data frame as an RData file for future use.
+
+```{r}
+save(Group, file = "/home/samutavi/Documents/Coe College/Spellman 2018/USEast2015/Output/EGCoagg.Rdata")
+```
+

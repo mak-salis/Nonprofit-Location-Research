@@ -1,0 +1,180 @@
+---
+title: "Replication of the EG Metric-Part 3"
+output:
+  pdf_document: default
+  html_notebook: default
+  toc: true
+---
+#Purpose
+In this document, I want to replicate the EG metric for agglomeration for every nonprofit industry in every major NTEE sector, in Cedar Rapids.
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/CR13.Rdata")
+#Cleaning up the dataframe
+CR13 <- CR13[-c(226:230), ]
+```
+
+#Method
+I'm going to continue using total revenue as a measure of size and I will use 5-digit zip codes for geographic units. 
+
+$i$ will be given by 5-digit zip codes.
+
+$z_k$ is each NP establishment's share of total "ntee1" industry revenue (that is, the one-letter industry designation)
+
+$x_i$ is $i$'s share of "ntmaj5" revenue
+
+With these three variables, we would find the following:
+
+$s_i$ would be constructed from $z_k$, using only establishments inside $i$, for each one-letter industry
+
+$G$ would be constructed from $s_i$ and $x_i$, for each one-letter industry
+
+$H$ comes from a Herfindahl of $z_k$, for each one-letter industry
+
+These variables would give $\gamma$, which is the EG measure of agglomeration. I want a gamma for every one-letter industry.
+
+#Starting with HU sector
+The HU sector has eight one-letter industries, I, J, K, L, M, N, O, and P. In Part 1, we found $\gamma$ for industry P. In Part 2, I automated the code to get gamma for every industry in sector HU. Now I want to get the gamma value for every nonprofit industry in Cedar Rapids. This means I'm no longer using just a subset of CR13 data.
+
+#Creating Necessary Variables
+
+##Creating $z_k$
+The first step is to create a variable called "zsubk" which is every nonprofit's share of total revenue in its own "ntee1" industry. First, I need a data set of revenue subtotals by "ntee1" industry.
+```{r}
+totrevnt1 <- aggregate(CR13$totrev, 
+          list(CR13$ntee1),
+          sum)
+colnames(totrevnt1) <- c("Industry", "r")
+totrevnt1
+```
+Now I need to divide each nonprofit's total revenue by the appropriate number from the dataset above, depending on the NTEE1 industry. The easiest way to do this is probably to create a new column in CR13 that has the relevant subtotal for each nonprofit. 
+
+```{r}
+CR13$subtotals <- totrevnt1$r[ match(CR13$ntee1, totrevnt1$Industry) ]
+
+```
+
+Next, I will create a vector "zsubk" which is each establishment's total revenue divided by the sum given above.
+```{r}
+CR13$zsubk <- CR13$totrev/CR13$subtotals
+CR13$zsubk
+sum(CR13$zsubk) #Checking that the individual shares add to 26. They add to 25 because CR does not have any nonprofits in industry V.
+```
+ 
+This gives $z_k$. 
+
+##Creating $x_i$
+Next, I want to find $x_i$ which is each zip code's share of total NTEE maj 5 revenue. For this, I'll need to aggregate by zip code and "ntmaj5" to find subtotals for each one, and then I also need the totals for each ntmaj5 sector. 
+```{r}
+totrevzip <- aggregate(CR13$totrev,
+                       list(CR13$zip5, CR13$ntmaj5),
+                       sum)
+colnames(totrevzip) <- c("zipcode", "ntmaj5", "zipsubtotal")
+totrevzip
+
+totrevnt5 <- aggregate(CR13$totrev,
+                       list(CR13$ntmaj5),
+                       sum)
+colnames(totrevnt5) <- c("ntmaj5", "nt5subtotal")
+totrevnt5
+#Now to merge the two datasets.
+totrevzip <- merge(totrevzip, totrevnt5, all = TRUE)
+#Then I get xsubi for every zip code by dividing.
+totrevzip$xsubi <- totrevzip$zipsubtotal/totrevzip$nt5subtotal
+#The sum of all the xsubis should be 5.
+sum(totrevzip$xsubi)
+```
+
+##Creating $s_i$
+Now I have $z_k$ and $x_i$. Using $z_k$, I need to get $s_i$ for every zip code. This is defined as $s_i=\sum_k{z_k}{u_{ki}}$ where $u_{ki}$ is an indicator variable equal to 1 if establishment $k$ is in $i$ and equal to 0 if $k$ is not in $i$. I need a different $s_i$ for every industry, so basically I need to aggregate just the establishments in each zipcode AND industry to find subtotals of the variable I've called "zsubk". 
+
+```{r}
+totrevzip2 <- aggregate(CR13$zsubk, 
+                      list(CR13$zip5, CR13$ntee1),
+                      sum)
+colnames(totrevzip2) <- c("zipcode", "ntee1", "ssubi")
+sum(totrevzip2$ssubi)
+sum(totrevzip2$ssubi[totrevzip2$Group.2 == "D"]) #Checking that any given industry totals to 1.
+```
+```{r}
+#Checking that there are no values of ssubi that are above 1.
+length(totrevzip2$ssubi)
+length(totrevzip2$ssubi[totrevzip2$ssubi > 1])
+sum(totrevzip2$ssubi)
+```
+
+##Finding $G$ for Industry P
+Now I add these "xsubi" values to the data frame "totrevzip2" in a column called "xsubi". I use the merge function for this. However, it's tricky because at this stage I need to specify which ntmaj5 sector each ntee1 industry belongs to. So first, I will create a column called ntmaj5 in the totrevzip2 dataframe that gives the correct sector. Then hopefully they will merge correctly based on both zipcode and ntmaj5 variables.
+```{r}
+totrevzip2$ntmaj5 <- CR13$ntmaj5[ match(totrevzip2$ntee1, CR13$ntee1)]
+#That worked! Now to merge correctly...
+
+revzip <- merge(totrevzip, totrevzip2, by=c("zipcode", "ntmaj5"))
+
+revzip
+```
+With this dataset, I can find G. $G=\sum_i{(s_i-x_i)^2}$
+
+```{r}
+revzip$geocon <- (revzip$ssubi-revzip$xsubi)^2
+Gbyindustry <- aggregate(revzip$geocon, 
+              list(revzip$ntee1),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+totrevnt1 <- merge(totrevnt1, Gbyindustry, all = TRUE)
+```
+Now I have a vector of G values by industry, which is exactly what I want.
+
+##Finding $H$ for Every Industry
+Now I can use zsubk to find the Herfindahl index given by $H=\sum_k{z_k^2}$ for every industry.
+```{r}
+library(hhi)
+H <- by(CR13, list(CR13$ntee1), function(x) hhi(x, "zsubk"), simplify = FALSE)
+#Now I need this as a dataframe.
+H <- cbind(H)
+H <- unlist(H)
+totrevnt1 <- cbind(totrevnt1, H)
+
+```
+##Finding $X$ for Every Industry
+The last thing I need in order to find $\gamma$ for every industry is $\sum{x_i^2}$, which I will just call "X". Again, I can use "by" to apply my function to subsets of the dataframe.
+
+```{r}
+X <- by(revzip$xsubi, list(revzip$ntee1), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+totrevnt1 <- cbind(totrevnt1, X)
+
+```
+
+#Result
+Now I have G, H, and X by industry in a dataframe called totrevnt1. I can use those three to come up with $\gamma$, using the EG definition of $\gamma$.
+
+$$\gamma=\frac{G-(1-\sum{x_i^2})H}{(1-\sum{x_i^2})(1-H)}$$
+that is,
+$$\gamma=\frac{G-(1-X)H}{(1-X)(1-H)}$$
+```{r}
+attach(totrevnt1)
+totrevnt1$gamma <- (totrevnt1$G-(1-totrevnt1$X)*totrevnt1$H)/((1-totrevnt1$X)*(1-totrevnt1$H))
+totrevnt1$gamma
+```
+Wow. If we can believe these numbers, it looks like nonprofits in almost every industry are dispersing. One interesting result is that there are several industries with only one nonprofit, making the Herfindahl index 1, and giving a "-inf" result for gamma. For this reason, I'm going to add a column to the totrevnt1 dataframe showing the number of nonprofits in each industry, so we can see if there are any interesting patterns. For example, I wonder if industries with more nonprofits have higher gamma values. A correlation of the two might be interesting...
+
+```{r}
+library(plyr)
+np <- count(CR13, "ntee1")
+names(np)[1] = "Industry"
+totrevnt1 <- merge(totrevnt1, np)
+totrevnt1
+
+```
+```{r}
+plot(totrevnt1$gamma, totrevnt1$freq)
+```
+
+There's no clear correlation but there is an interesting shape to that. The results so far raise a few questions.
+
+\begin{enumerate}
+  \item{What is the threshhold number of nonprofits in an industry above which the gamma value is meaningful?}
+  \item{How does increasing the scale affect gamma?}
+  \item{Do we get similar results using another variable as a measure of size, for example, assets?}
+\end{enumerate}

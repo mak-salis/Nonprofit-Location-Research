@@ -1,0 +1,204 @@
+---
+title: "Replication of the EG Metric"
+output:
+  pdf_document: default
+  html_notebook: default
+  toc: true
+---
+#Purpose
+In this document, I want to replicate the EG metric for agglomeration using sample data and variables that could be proxies for the variables used by Ellison and Glaeser.
+```{r}
+#install.packages("hhi")
+load("/home/samutavi/Documents/Coe College/Spellman 2018/CR13.Rdata")
+names(CR13)
+```
+
+#Method
+I don't have employment data for the nonprofits in CR, so I'm considering using total revenue as a measure of size. The EG metric needs basically three variables, which would look like the following if we used revenue:
+
+$i$ will be given by census tracts (to be constructed)
+
+$z_k$ is each NP establishment's share of total "nteecc" industry revenue
+
+$x_i$ is $i$'s share of "ntmaj5" revenue
+
+With these three variables, we would find the following:
+
+$s_i$ would be constructed from $z_k$, using only establishments inside $i$
+
+$G$ would be constructed from $s_i$ and $X_i$
+
+$H$ comes from a Herfindahl of $z_k$
+
+These variables would give $\gamma$, which is the EG measure of agglomeration.
+
+#Choosing a Test Industry
+First, I'm interested in looking at the biggest categories in the NTEE major 5 groups.
+
+```{r}
+barplot(table(CR13$ntmaj5))
+```
+
+The Human Services group includes groups I, J, K, L, M, N, O, and P. So now I would like to see what sizes those groups are, using only a subset of the data that is HU establishments.
+
+```{r}
+HU <- subset(CR13, CR13$ntmaj5 == "HU")
+barplot(table(HU$ntee1))
+```
+
+ Within P, let's look at the specific NTEE industries.
+ 
+```{r}
+P <-subset(HU, HU$ntee1 == "P")
+barplot(table(P$nteecc))
+```
+ 
+The biggest group within P has only 5 establishments, which seems too small to be useful. Group P might be the most specific we can get within Cedar Rapids and even that might be too small a group, since there are only 31 establishments in CR. Anyway, as a test of the metric, we can try to use P as the industry, with HU as the larger group (i.e. "overall manufacturing"). Just for testing purposes, I will use zip codes since finding the census tract code for each establishment is a separate task.
+
+#Creating Necessary Variables
+
+##Creating $z_k$
+In that case, I will create a variable called "zsubk" which is basically $z_k$, that is, the establishment's share of total revenue in P in CR. First, I need to find the total revenue for all P establishments in CR.
+
+```{r}
+totrevP <- sum(P$totrev)
+totrevP
+```
+
+Next, I will create a vector "zsubk" which is each establishment's total revenue divided by the sum given above.
+```{r}
+P$zsubk <- P$totrev/totrevP
+P$zsubk
+sum(P$zsubk) #Checking that the individual shares add to 1, as they should.
+```
+ 
+This gives $z_k$. 
+
+##Creating $x_i$
+Next, I want to find $x_i$ which is each zip code's share of total HU revenue. So first I find totrevHU.  
+```{r}
+totrevHU <- sum(HU$totrev)
+totrevHU
+```
+Finding each zip code's share is trickier. It turns out I can use the aggregate command to add totrev by zip code.
+
+```{r}
+?aggregate
+totrevzip <- aggregate(HU$totrev, 
+          list(HU$zip),
+          sum)
+totrevzip
+
+#Added later to compare scale:
+totrevzip5 <- aggregate(HU$totrev,
+              list(HU$zip5),
+              sum)
+totrevzip5
+```
+Perfect. This has defined 79 areas ($i$) and now we can get $x_i$ for each of the areas by dividing each of the numbers above by totrevHU.
+
+```{r}
+names(totrevzip)
+totrevzip$xsubi <- totrevzip$x/totrevHU
+totrevzip$xsubi
+sum(totrevzip$xsubi)
+
+names(totrevzip5)
+totrevzip5$xsubi <- totrevzip5$x/totrevHU
+totrevzip5$xsubi
+sum(totrevzip5$xsubi)
+```
+
+##Creating $s_i$
+Now I have $z_k$ and $x_i$. Using $z_k$, I need to get $s_i$ for every zip code. This is defined as $s_i=\sum_k{z_k}{u_{ki}}$ where $u_{ki}$ is an indicator variable equal to 1 if establishment $k$ is in $i$ and equal to 0 if $k$ is not in $i$, so basically I need to aggregate just the establishments in each zipcode to find subtotals of the variable I've called "zsubk". 
+
+```{r}
+totrevzip2 <- aggregate(P$zsubk, 
+                      list(P$zip),
+                      sum)
+colnames(totrevzip2) <- c("Group.1", "ssubi")
+sum(totrevzip2$ssubi)
+
+totrevzip52 <- aggregate(P$zsubk, 
+                      list(P$zip5),
+                      sum)
+colnames(totrevzip52) <- c("Group.1", "ssubi")
+sum(totrevzip52$ssubi)
+
+```
+
+##Finding $G$ for Industry P
+Now the question is how to add these "x" values to the data frame "totrevzip" in a column called "ssubi". If the zip code is not in the list above, the value of ssubi should be 0 and if it is in the list above, it should put in the value of x above. I found that I can use the merge function for this. I would like to get a value of 0 for all the zipcodes that have no revenue from P, but maybe I will do that in a separate command.
+ 
+```{r}
+revzip <- merge(totrevzip, totrevzip2, all = TRUE)
+revzip[is.na(revzip)] <- 0
+revzip$x <- NULL  #removing a column I don't need
+revzip
+
+revzip5 <- merge(totrevzip5, totrevzip52, all = TRUE)
+revzip5[is.na(revzip5)] <- 0
+revzip5$x <- NULL  #removing a column I don't need
+revzip5
+
+
+```
+With this dataset, I can find G. $G=\sum_i{(s_i-x_i)^2}$
+
+```{r}
+revzip$geocon <- (revzip$ssubi-revzip$xsubi)^2
+G <- sum(revzip$geocon)
+G
+
+revzip5$geocon <- (revzip5$ssubi-revzip5$xsubi)^2
+G5 <- sum(revzip5$geocon)
+G5 
+
+```
+
+##Finding $H$ for Industry P
+Now if I can use zsubk to find the Herfindahl index given by $H=\sum_k{z_k^2}$, I can apply the entire formula to find $\gamma$ for industry P. First, I will create a new column "zsubk2" which is expressed as percentages.
+```{r}
+P$zsubk2 <- P$zsubk*100 #Ended up not using this.
+sum(P$zsubk2)
+library(hhi)
+?hhi
+#I think this is the same in both scales.
+```
+```{r}
+#Checking that there are no values of ssubi that are above 1.
+length(totrevzip2$ssubi)
+length(totrevzip2$ssubi[revzip$ssubi > 1])
+sum(totrevzip2$ssubi)
+
+length(totrevzip52$ssubi)
+length(totrevzip52$ssubi[revzip5$ssubi > 1])
+sum(totrevzip52$ssubi)
+
+```
+
+```{r}
+H <- hhi(P, "zsubk") 
+H
+```
+
+#Result
+Now I have G, H, and $x_i$ for industry P. I can use those three to come up with $\gamma$, using the EG definition of $\gamma$.
+
+$$\gamma=\frac{G-(1-\sum{x_i^2})H}{(1-\sum{x_i^2})(1-H)}$$
+
+```{r}
+sum(revzip$xsubi)
+hhi(revzip, "xsubi")
+gamma <- (G-H*(1-hhi(revzip, "xsubi")))/((1-hhi(revzip, "xsubi"))*(1-H))
+gamma
+
+sum(revzip5$xsubi)
+hhi(revzip5, "xsubi")
+gamma5 <- (G5-H*(1-hhi(revzip5, "xsubi")))/((1-hhi(revzip5, "xsubi"))*(1-H))
+gamma5
+
+```
+This indicates that nonprofits in this industry are actually dispersing rather than agglomerating. I want to repeat this with 5-digit zipcodes and compare the two gammas, so that is my next step. I'm going back and adding a line of code to use "zip5" instead of "zip".
+
+It turns out I get a similar result, indicating that the change in scale did not make much of a difference. That is definitely interesting since previous work has indicated that scale makes a big difference. The next step is to do the code again, this time making G, H, and $\gamma$ vectors with values for every industry in HU, and then other sectors.

@@ -1,0 +1,49 @@
+---
+title: "DGS Five Year--Data Prep"
+output: html_notebook
+---
+
+In this document, I will prepare the data files for analysis and create RData files for 2011, 2012, 2013, 2014, and 2015. I am using NCCS core files for public charities and private foundations and I want info for the 31 eastern states of the US. I will create 5 RData files and then run each analysis separately. 
+```{r}
+US2015PC <- read.csv("~/Documents/Coe College/Spellman 2018/NCCS Data/nccs.core2015pc.csv")
+US2015PF <- read.csv("~/Documents/Coe College/Spellman 2018/NCCS Data/nccs.core2015pf.csv")
+names(US2015PC)
+names(US2015PF)
+```
+
+```{r}
+colnames(US2015PC) <- toupper(names(US2015PC))
+colnames(US2015PF) <- toupper(names(US2015PF))
+
+
+#I need the variables for total revenue, total expenses, program revenue, compensation, and gifts and grants.
+US2015PF$TOTEXP <- US2015PF$P1TOTEXP
+US2015PF$TOTREV <- US2015PF$P1TOTREV
+US2015PC$TOTEXP <- US2015PC$EXPS
+US2015PF$COMPENS <- US2015PF$P1OFCOMP
+US2015PC$GFTSGRNTS <- US2015PC$GFTGRNTSRCVD170
+US2015PF$GFTSGRNTS <- US2015PF$P1TCONT
+#The only one I don't have is program revenue for private foundations
+
+cmn <- intersect(names(US2015PC),names(US2015PF))
+cmn
+US2015 <- rbind(US2015PC[,cmn],US2015PF[,cmn])
+
+#Check how many NAs I have in each column.
+sum(is.na(US2015$ZIP5))
+class(US2015$ZIP)
+class(US2015$ZIP5)
+```
+
+```{r}
+
+US2015 <- subset.data.frame(US2015, !is.na(US2015$ZIP5))
+
+east <- c("AL","AR","CT","DE","FL","GA","IA","IL","IN","KY","LA","MA","MD","ME","MI","MN","MO","MS","NC","NH","NJ","NY","OH","PA","RI","SC","TN","VA","VT","WI","WV")
+East15 <- US2015[US2015$STATE %in% east, , drop = TRUE]
+East15$STATE <- factor(East15$STATE)
+
+save(East15, file = "/home/samutavi/Documents/Coe College/Spellman 2018/DGSFiveYear/RData/East15.Rdata")
+
+```
+ I have run this code five times, each time replacing the year, to get 5 RData files. Now I can analyze each of them in another doc.

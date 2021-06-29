@@ -1,0 +1,307 @@
+---
+title: "DGS Five Year Analysis"
+output: html_notebook
+---
+
+In this document, I will replicate the DGS metric for nonprofits in the 31 eastern states for five different years. I will start with 2011.
+```{r}
+#load("RData/East11.Rdata")
+
+Y2011 <- aggregate(East11$TOTREV, 
+          list(East11$NTEECC),
+          sum)
+colnames(Y2011) <- c("NTEECC", "r")
+
+#Generating frequency column
+library(plyr)
+np <- count(East11, "NTEECC")
+names(np)[1] = "NTEECC"
+Y2011 <- merge(Y2011, np)
+colnames(Y2011) <- c("NTEECC", "r", "N")
+
+regions <- aggregate(East11$TOTREV, 
+          list(East11$NTEECC, East11$ZIP5),
+          sum)
+colnames(regions) <- c("NTEECC", "ZIP5", "r")
+
+#Generating frequency column
+rg <- count(regions, "NTEECC")
+colnames(rg) <- c("NTEECC", "K")
+Y2011 <- merge(Y2011, rg)
+
+#Finding the max freq
+max(rg$K)
+
+
+East11$IndRev <- Y2011$r[ match(East11$NTEECC, Y2011$NTEECC)]
+East11$z_n <- East11$TOTREV/East11$IndRev
+East11$z_n2 <- East11$z_n^2
+H <- aggregate(East11$z_n2,
+                      list(East11$NTEECC),
+                      sum)
+Y2011$H <- H$x
+
+
+regions$IndRev <- Y2011$r[ match(regions$NTEECC, Y2011$NTEECC)]
+regions$s_k <- regions$r/regions$IndRev
+regions$s_k2 <- regions$s_k^2
+J <- aggregate(regions$s_k2,
+                      list(regions$NTEECC),
+                      sum)
+Y2011$J <- J$x
+#Final step:
+Y2011$G <- Y2011$J-(1/Y2011$K)
+Y2011$M <- Y2011$H-(1/Y2011$N)
+Y2011$DGS2011 <- Y2011$G-Y2011$M
+
+rm(East11)
+```
+
+Repeating this for 2012
+```{r}
+load("RData/East12.Rdata")
+
+Y2012 <- aggregate(East12$TOTREV, 
+          list(East12$NTEECC),
+          sum)
+colnames(Y2012) <- c("NTEECC", "r")
+
+#Generating frequency column
+library(plyr)
+np <- count(East12, "NTEECC")
+names(np)[1] = "NTEECC"
+Y2012 <- merge(Y2012, np)
+colnames(Y2012) <- c("NTEECC", "r", "N")
+
+regions <- aggregate(East12$TOTREV, 
+          list(East12$NTEECC, East12$ZIP5),
+          sum)
+colnames(regions) <- c("NTEECC", "ZIP5", "r")
+
+#Generating frequency column
+rg <- count(regions, "NTEECC")
+colnames(rg) <- c("NTEECC", "K")
+Y2012 <- merge(Y2012, rg)
+
+#Finding the max freq
+max(rg$K)
+
+
+East12$IndRev <- Y2012$r[ match(East12$NTEECC, Y2012$NTEECC)]
+East12$z_n <- East12$TOTREV/East12$IndRev
+East12$z_n2 <- East12$z_n^2
+H <- aggregate(East12$z_n2,
+                      list(East12$NTEECC),
+                      sum)
+Y2012$H <- H$x
+
+
+regions$IndRev <- Y2012$r[ match(regions$NTEECC, Y2012$NTEECC)]
+regions$s_k <- regions$r/regions$IndRev
+regions$s_k2 <- regions$s_k^2
+J <- aggregate(regions$s_k2,
+                      list(regions$NTEECC),
+                      sum)
+Y2012$J <- J$x
+#Final step:
+Y2012$G <- Y2012$J-(1/Y2012$K)
+Y2012$M <- Y2012$H-(1/Y2012$N)
+Y2012$DGS2012 <- Y2012$G-Y2012$M
+
+rm(East12)
+```
+Now for 2013.
+
+
+```{r}
+load("RData/East13.Rdata")
+
+Y2013 <- aggregate(East13$TOTREV, 
+          list(East13$NTEECC),
+          sum)
+colnames(Y2013) <- c("NTEECC", "r")
+
+#Generating frequency column
+library(plyr)
+np <- count(East13, "NTEECC")
+names(np)[1] = "NTEECC"
+Y2013 <- merge(Y2013, np)
+colnames(Y2013) <- c("NTEECC", "r", "N")
+
+regions <- aggregate(East13$TOTREV, 
+          list(East13$NTEECC, East13$ZIP5),
+          sum)
+colnames(regions) <- c("NTEECC", "ZIP5", "r")
+
+#Generating frequency column
+rg <- count(regions, "NTEECC")
+colnames(rg) <- c("NTEECC", "K")
+Y2013 <- merge(Y2013, rg)
+
+#Finding the max freq
+max(rg$K)
+
+
+East13$IndRev <- Y2013$r[ match(East13$NTEECC, Y2013$NTEECC)]
+East13$z_n <- East13$TOTREV/East13$IndRev
+East13$z_n2 <- East13$z_n^2
+H <- aggregate(East13$z_n2,
+                      list(East13$NTEECC),
+                      sum)
+Y2013$H <- H$x
+
+
+regions$IndRev <- Y2013$r[ match(regions$NTEECC, Y2013$NTEECC)]
+regions$s_k <- regions$r/regions$IndRev
+regions$s_k2 <- regions$s_k^2
+J <- aggregate(regions$s_k2,
+                      list(regions$NTEECC),
+                      sum)
+Y2013$J <- J$x
+#Final step:
+Y2013$G <- Y2013$J-(1/Y2013$K)
+Y2013$M <- Y2013$H-(1/Y2013$N)
+Y2013$DGS2013 <- Y2013$G-Y2013$M
+
+rm(East13)
+
+```
+
+2014:
+
+```{r}
+load("RData/East14.Rdata")
+
+Y2014 <- aggregate(East14$TOTREV, 
+          list(East14$NTEECC),
+          sum)
+colnames(Y2014) <- c("NTEECC", "r")
+
+#Generating frequency column
+library(plyr)
+np <- count(East14, "NTEECC")
+names(np)[1] = "NTEECC"
+Y2014 <- merge(Y2014, np)
+colnames(Y2014) <- c("NTEECC", "r", "N")
+
+regions <- aggregate(East14$TOTREV, 
+          list(East14$NTEECC, East14$ZIP5),
+          sum)
+colnames(regions) <- c("NTEECC", "ZIP5", "r")
+
+#Generating frequency column
+rg <- count(regions, "NTEECC")
+colnames(rg) <- c("NTEECC", "K")
+Y2014 <- merge(Y2014, rg)
+
+#Finding the max freq
+max(rg$K)
+
+
+East14$IndRev <- Y2014$r[ match(East14$NTEECC, Y2014$NTEECC)]
+East14$z_n <- East14$TOTREV/East14$IndRev
+East14$z_n2 <- East14$z_n^2
+H <- aggregate(East14$z_n2,
+                      list(East14$NTEECC),
+                      sum)
+Y2014$H <- H$x
+
+
+regions$IndRev <- Y2014$r[ match(regions$NTEECC, Y2014$NTEECC)]
+regions$s_k <- regions$r/regions$IndRev
+regions$s_k2 <- regions$s_k^2
+J <- aggregate(regions$s_k2,
+                      list(regions$NTEECC),
+                      sum)
+Y2014$J <- J$x
+#Final step:
+Y2014$G <- Y2014$J-(1/Y2014$K)
+Y2014$M <- Y2014$H-(1/Y2014$N)
+Y2014$DGS2014 <- Y2014$G-Y2014$M
+
+rm(East14)
+
+
+```
+
+Finally, 2015:
+
+```{r}
+load("RData/East15.Rdata")
+
+Y2015 <- aggregate(East15$TOTREV, 
+          list(East15$NTEECC),
+          sum)
+colnames(Y2015) <- c("NTEECC", "r")
+
+#Generating frequency column
+library(plyr)
+np <- count(East15, "NTEECC")
+names(np)[1] = "NTEECC"
+Y2015 <- merge(Y2015, np)
+colnames(Y2015) <- c("NTEECC", "r", "N")
+
+regions <- aggregate(East15$TOTREV, 
+          list(East15$NTEECC, East15$ZIP5),
+          sum)
+colnames(regions) <- c("NTEECC", "ZIP5", "r")
+
+#Generating frequency column
+rg <- count(regions, "NTEECC")
+colnames(rg) <- c("NTEECC", "K")
+Y2015 <- merge(Y2015, rg)
+
+#Finding the max freq
+max(rg$K)
+
+
+East15$IndRev <- Y2015$r[ match(East15$NTEECC, Y2015$NTEECC)]
+East15$z_n <- East15$TOTREV/East15$IndRev
+East15$z_n2 <- East15$z_n^2
+H <- aggregate(East15$z_n2,
+                      list(East15$NTEECC),
+                      sum)
+Y2015$H <- H$x
+
+
+regions$IndRev <- Y2015$r[ match(regions$NTEECC, Y2015$NTEECC)]
+regions$s_k <- regions$r/regions$IndRev
+regions$s_k2 <- regions$s_k^2
+J <- aggregate(regions$s_k2,
+                      list(regions$NTEECC),
+                      sum)
+Y2015$J <- J$x
+#Final step:
+Y2015$G <- Y2015$J-(1/Y2015$K)
+Y2015$M <- Y2015$H-(1/Y2015$N)
+Y2015$DGS <- Y2015$G-Y2015$M
+
+rm(East15)
+
+
+
+```
+
+Now I want to bind these together into one dataframe, but first I need to create the "YEAR" variable.
+
+```{r}
+#There's definitely a nicer way to do this with apply() or a function or something, but I don't know how to refer to df names :(
+Y2011$YEAR <- "2011"
+Y2012$YEAR <- "2012"
+Y2013$YEAR <- "2013"
+Y2014$YEAR <- "2014"
+Y2015$YEAR <- "2015"
+
+#Now I bind them together.
+NPAGG <- rbind(Y2011, Y2012)
+NPAGG <- rbind(NPAGG, Y2013)
+NPAGG <- rbind(NPAGG, Y2014)
+NPAGG <- rbind(NPAGG, Y2015)
+
+#Creating a Group variable
+NPAGG$Group <- substr(NPAGG$NTEECC, 1, 1)
+
+save(NPAGG, file = "Output/NPAGG.RData")
+```
+
+The dataframe NPAGG now has all the values of the DGS metric (as well as all the variables involved) for every NP core code for every year from 2011 to 2015. In the next document, I will create visualizations of the values in this dataframe.

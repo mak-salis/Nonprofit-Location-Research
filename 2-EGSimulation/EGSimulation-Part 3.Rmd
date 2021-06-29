@@ -1,0 +1,65 @@
+---
+title: "EG Metric Simulations, Part 3"
+output:
+  pdf_document: default
+  html_notebook: default
+  toc: true
+---
+#Purpose
+In this document, I want to explore the ways in which the EG metric does not control for industry differences. In EG Simulation Part 2, it became clear that when industries are evenly distributed, the EG metric controls for industry differences but when there is clustering, the degree of agglomeration according to the metric looks very different depending on the size of the industry. In particular, the variable $x_i$ is weighted heavily towards large plants, or industries with large plants, increasing G for small-plant industries and increasing X for large plant industries, with the final effect of a high gamma for small-plant industries and a lower gamma for large-plant industries, even thought they are actually agglomerated to the same degree.
+
+Unless there is a reason to think that it takes more of an agglomerative force to bring small plants together than to bring large plants together, this seems to be a limitation of the metric. Moreover, the fact that gamma tends to be more positive with more areas and a greater number of plants means that the size of the industry as a whole also matters, making it hard to compare gamma across industries. For example, if industry A had 9 plants evenly distributed across 9 areas and industry B in the same sector had 18 plants distributed across 18 areas, their gammas would be different even though their levels of agglomeration are the same. 
+
+This is shown in the example below. In this simulation, there are only four industries. A and B belong to the same sector and are both evenly distributed, with the same plant size. The only difference is that A only has 9 plants whereas B has 18. Similarly, industries D and E have the same plant size and are completely clustered in one area, with the only difference being the number of plants total.
+
+```{r echo=FALSE}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/EGSimPart3.Rdata")
+industries <- aggregate(EGSimPart3$Size, 
+          list(EGSimPart3$Industry),
+          sum)
+colnames(industries) <- c("Industry", "r")
+EGSimPart3$subtotals <- industries$r[ match(EGSimPart3$Industry, industries$Industry) ]
+EGSimPart3$zsubk <- EGSimPart3$Size/EGSimPart3$subtotals
+areas <- aggregate(EGSimPart3$Size,
+                       list(EGSimPart3$Area, EGSimPart3$Sector),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+sectortotals <- aggregate(EGSimPart3$Size,
+                       list(EGSimPart3$Sector),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+areas <- merge(areas, sectortotals, all = TRUE)
+areas$xsubi <- areas$subtotal/areas$sectortotal
+areas2 <- aggregate(EGSimPart3$zsubk, 
+                      list(EGSimPart3$Area, EGSimPart3$Industry),
+                      sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+areas2$sector <- EGSimPart3$Sector[ match(areas2$industry, EGSimPart3$Industry)]
+areas <- merge(areas, areas2, by=c("area", "sector"))
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+library(hhi)
+H <- by(EGSimPart3$zsubk, list(EGSimPart3$Industry), function(x) sum(x^2), simplify = FALSE)
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+library(plyr)
+np <- count(EGSimPart3, "Industry")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+EGSimPart3
+industries1 <- industries
+industries1
+plot(industries$gamma, industries$freq)
+```
+
+This confirms our intuition that as frequency increases, gamma tends towards 0. This means the agglomeration (or lack thereof) in small industries (that is industries with smaller frequencies) is exaggerated and the gamma of industries with a high frequency will tend to be close to zero. This indicates that the magnitude of gamma may be much smaller when analyzing industries with large numbers and it raises the question of how industries of different sizes can be fairly compared. Ideally, gamma would show agglomeration alone and control for industry size and industry plant size.

@@ -1,0 +1,85 @@
+---
+title: "EG Metric, Nonprofits in Eastern US, 2015-Part 2"
+output:
+  pdf_document: default
+  html_notebook: default
+  toc: true
+---
+#Purpose
+In this document, I want to replicate the EG metric for every NTEE industry in the Eastern US, using state as the geographic unit. I hypothesize that at the state level, gammas are much more positive than they are at the zipcode level. I will use the same data set I used for Part 1, that is the 31 eastern states of the US.
+```{r}
+load("/home/samutavi/Documents/Coe College/Spellman 2018/RData/East15.Rdata")
+```
+My first step is to check that the file contains only states that I want to include.
+```{r}
+levels(East15$STATE)
+```
+
+Great! I think I have all the values I need then, to run the following code to get the values of all major variables and $\gamma$, the Ellison and Glaeser (1997) metric for agglomeration.
+
+```{r}
+industries <- aggregate(East15$TOTREV, 
+          list(East15$NTEECC),
+          sum)
+colnames(industries) <- c("Industry", "r")
+#Generating frequency column
+library(plyr)
+np <- count(East15, "NTEECC")
+names(np)[1] = "Industry"
+industries <- merge(industries, np)
+#Subsetting by frequency greater than 3
+industries <- subset.data.frame(industries, freq > 2)
+
+East15$subtotals <- industries$r[ match(East15$NTEECC, industries$Industry) ]
+East15$zsubk <- East15$TOTREV/East15$subtotals
+areas <- aggregate(East15$TOTREV,
+                       list(East15$STATE, East15$NTMAJ12),
+                       sum)
+colnames(areas) <- c("area", "sector", "subtotal")
+sectortotals <- aggregate(East15$TOTREV,
+                       list(East15$NTMAJ12),
+                       sum)
+colnames(sectortotals) <- c("sector", "sectortotal")
+areas <- merge(areas, sectortotals, all = TRUE)
+areas$xsubi <- areas$subtotal/areas$sectortotal
+areas2 <- aggregate(East15$zsubk, 
+                      list(East15$STATE, East15$NTEECC),
+                      sum)
+colnames(areas2) <- c("area", "industry", "ssubi")
+areas2$sector <- East15$NTMAJ12[ match(areas2$industry, East15$NTEECC)]
+areas <- merge(areas, areas2, by=c("area", "sector"))
+areas$geocon <- (areas$ssubi-areas$xsubi)^2
+Gbyindustry <- aggregate(areas$geocon, 
+              list(areas$industry),
+              sum)
+colnames(Gbyindustry) <- c("Industry", "G")
+industries <- merge(industries, Gbyindustry, all = TRUE)
+H <- by(East15$zsubk, list(East15$NTEECC), function(x) sum(x^2), simplify = FALSE)
+H <- cbind(H)
+H <- unlist(H)
+industries <- cbind(industries, H)
+X <- by(areas$xsubi, list(areas$industry), function(x) sum(x^2), simplify = FALSE)
+X <- cbind(X)
+X <- unlist(X)
+industries <- cbind(industries, X)
+industries$gamma <- (industries$G-(1-industries$X)*industries$H)/((1-industries$X)*(1-industries$H))
+NTEECCstate <- industries
+save(NTEECCstate, file = "/home/samutavi/Documents/Coe College/Spellman 2018/RData/NTEECCstate.Rdata")
+plot(industries$gamma, industries$freq)
+```
+```{r}
+library(ggplot2)
+gammastate <- ggplot(data = NTEECCstate, aes(x=gamma)) + 
+  geom_histogram(binwidth = .01, fill="black", col="gray") +
+  xlim(-1, 1)
+#Takes out gridlines, background, and creates neater appearance
+gammastate + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=20), plot.title = element_text(hjust = 0.5))+ labs(title = "NP gamma at state level", x = "Gamma", y = "Number of industries")
+ggsave("gammastate.jpg", width = 16, height = 9)
+```
+A little more information about the distribution:
+```{r}
+install.packages("fitdistrplus")
+library(fitdistrplus)
+descdist(industries$gamma[!is.na(industries$gamma)], discrete = FALSE)
+```

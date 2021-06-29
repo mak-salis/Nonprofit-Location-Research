@@ -1,0 +1,26 @@
+---
+title: "EG Critique"
+output:
+  html_notebook: default
+  pdf_document: default
+header-includes: \usepackage{xcolor}
+---
+
+The Ellison and Glaeser metric for agglomeration, gamma, is constructed as
+
+$$\gamma = \frac{G-(1-X)H}{(1-X)(1-H)}$$ 
+
+where \begin{itemize}
+  \item{$G=\sum{(x_i-s_i)^2}$}
+  \item{$X=\sum{x_i^2}$}
+  \item{$H=\sum{z_k^2}$}
+  \item{$s_i$ is each area $i$'s share of industry employment}
+  \item{$x_i$ is each area $i$'s share of sector (manufacturing) employment, and}
+  \item{$z_k$ is each individual plant's share of industry employment.}
+\end{itemize}
+
+Ellison and Glaeser propose that G represents geographic concentration, and \color{red}{$(1-X)H$ represents the expected geographic concentration if the industry behaves like the sector.}
+
+One criticism is that as the geographic unit of analysis gets smaller, $x_i$ and $s_i$ necessarily decrease. As $x_i$ approaches 0, two things happen. One, $X$ approaches 0. Second, $G$ approaches $\sum{s_i^2}$. Since $s_i$ also decreases, but $H$ stays the same, the numerator (which alone determines the sign of gamma) necessarily becomes more negative. This makes sense on one level (since the smaller the geographic unit, the more firms will seem to "disperse") but at the same time also suggests that $x_i$ could be artificially low if the geographic unit of analysis is sufficiently small. That is, at some "perfect" geographic scale, H is comparable to G and we expect the difference to be 0 if there is in fact no agglomeration. At all other scales, the ordering of industries by their gamma values may be correct, but positive and negative values of gamma CANNOT be interpreted as agglomeration and dispersion, respectively.
+
+The second criticism is that gamma does not seem to control for industry size. (EG Simulation, Part 3.) Also, it does not seem to control for industry plant size distribution (EG Sim, Part 2). (Also summarized in slide 18 of Spellman Part 2.pdf.)
