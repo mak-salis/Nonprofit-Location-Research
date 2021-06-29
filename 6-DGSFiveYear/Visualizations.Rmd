@@ -1,0 +1,43 @@
+---
+title: "Visualizations"
+output: html_notebook
+---
+
+In this document, I will create visualizations of the NPAGG dataframe, which has DGS metric values for all nonprofit core codes in 31 states from 2011 to 2015. This first thing I'm interested in seeing is if the distribution of DGS has changed over the 5 year period.
+
+```{r}
+load("Output/NPAGG.RData")
+library(ggplot2)
+density <-ggplot(NPAGG, aes(DGS)) + 
+  geom_density(aes(color = YEAR))+
+  xlim(-.001, .001)
+ggsave("Output/densityDGS.png")
+plot(density)
+```
+This seems like the three plots overlap completely.
+
+```{r}
+scatter <- ggplot(NPAGG, aes(x=DGS, y=NTEECC)) +
+  geom_point(aes(color=YEAR))
+plot(scatter)
+ggsave("Output/IndDGSscatter.png")
+
+
+n <- subset(NPAGG, NPAGG$NTEECC == "A01"| NPAGG$NTEECC == "A02" | NPAGG$NTEECC == "A03")
+
+A123 <- ggplot(n, aes(x=DGS, y=NTEECC)) +
+  geom_point(aes(color=YEAR))
+plot(A123)
+ggsave("Output/A123scatter.png")
+```
+Looking at the relationship between DGS and total core code revenue.
+```{r}
+totrev <- ggplot(NPAGG, aes(DGS)) +
+  geom_point(aes(x = DGS, y = r, color = YEAR))
+plot(totrev)
+ggsave("Output/totrev1.png")
+
+#Zooming in on the low-revenue core codes
+totrev + ylim(0, 5000000000)
+```
+
